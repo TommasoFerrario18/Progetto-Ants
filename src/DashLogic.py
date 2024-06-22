@@ -16,6 +16,14 @@ colors_dict = {
     "grey": "Disappeared",
 }
 
+role_to_colors_dict = {
+    "N": "cyan",
+    "F": "blue",
+    "C": "yellow",
+    "Q": "red",
+    "": "grey",
+}
+
 
 def read_graph(colony, day):
     path = f"./data/insecta-ant-colony{colony}/ant_mersch_col{colony}_day{day}.graphml"
@@ -76,40 +84,51 @@ def create_color_map_community(ants_df, period):
     return colors
 
 
-def get_nodes_edges_positions(Graph, layout="kamada_kawai", period="group_period1"):
-    layout = Graph.layout(layout)
+def get_edges_positions(graph, layout):
+    Xe = []
+    Ye = []
+    for e in graph.es:
+        Xe.extend([layout[e.source][0], layout[e.target][0], None])
+        Ye.extend([layout[e.source][1], layout[e.target][1], None])
+
+    return Xe, Ye
+
+
+def get_nodes_edges_positions(
+    Graph, layout_name="kamada_kawai", period="group_period1"
+):
+    layout = Graph.layout(layout_name)
+    # Get node positions
+    Xn = [layout[k][0] for k in range(len(Graph.vs))]
+    Yn = [layout[k][1] for k in range(len(Graph.vs))]
+
+    Xe, Ye = get_edges_positions(Graph, layout)
+    return Xn, Yn, Xe, Ye
+
+
+def _get_node_community_position(graph, layout="kamada_kawai", period="group_period1"):
+    layout = graph.layout(layout)
 
     df = pd.DataFrame(columns=["id", "x", "y", "role"])
 
-    for i in range(len(Graph.vs)):
+    for i in range(len(graph.vs)):
         df = pd.concat(
             [
                 df,
                 pd.DataFrame(
                     {
-                        "id": Graph.vs[i]["id"],
+                        "id": graph.vs[i]["id"],
                         "x": layout[i][0],
                         "y": layout[i][1],
-                        "role": Graph.vs[i][period],
+                        "role": graph.vs[i][period],
                     },
                     index=[0],
                 ),
             ],
             ignore_index=True,
         )
-    print(df.dtypes)
-    # Get node positions
-    Xn = [layout[k][0] for k in range(len(Graph.vs))]
-    Yn = [layout[k][1] for k in range(len(Graph.vs))]
-
-    # Get edge positions
-    Xe = []
-    Ye = []
-    for e in Graph.es:
-        Xe.extend([layout[e.source][0], layout[e.target][0], None])
-        Ye.extend([layout[e.source][1], layout[e.target][1], None])
-
-    return Xn, Yn, Xe, Ye
+    Xe, Ye = get_edges_positions(graph, layout)
+    return df, Xe, Ye
 
 
 def _get_degree_centrality(graph, graph_df, period):
@@ -182,8 +201,43 @@ def get_graph(colony, day, graph_type, edge_filter):
         colors = ["lime" for i in range(len(graph.vs))]
 
     graph = remove_edges(graph, edge_filter)
-    Xn, Yn, Xe, Ye = get_nodes_edges_positions(graph)
-    # df, Xe, Ye = get_nodes_edges_positions(graph)
+    community_trace = []
+
+    if graph_type == "community":
+        df, Xe, Ye = _get_node_community_position(graph, period="group_period1")
+        for role in df["role"].unique():
+            if role == "":
+                continue
+            tmp = df[df["role"] == role]
+            community_trace.append(
+                go.Scatter(
+                    x=tmp["x"],
+                    y=tmp["y"],
+                    mode="markers+text",
+                    marker=dict(size=25, color=role_to_colors_dict[role]),
+                    name=colors_dict[role_to_colors_dict[role]],
+                    text=tmp["id"].values,
+                )
+            )
+    else:
+        Xn, Yn, Xe, Ye = get_nodes_edges_positions(graph)
+        node_trace = go.Scatter(
+            x=Xn,
+            y=Yn,
+            mode="markers+text",
+            textfont=dict(size=15, color="black"),
+            hoverinfo="text",
+            marker=dict(
+                size=sizes,
+                line_width=2,
+                color=colors,
+            ),
+            name="Ants",
+        )
+
+        # Add node labels
+        node_text = [f"{k['id']}" for k in graph.vs]
+        node_trace.text = node_text
 
     edge_trace = go.Scatter(
         x=Xe,
@@ -193,28 +247,15 @@ def get_graph(colony, day, graph_type, edge_filter):
         mode="lines",
         name="Interactions",
     )
-    # Create the node trace
-    node_trace = go.Scatter(
-        x=Xn,
-        y=Yn,
-        mode="markers+text",
-        textfont=dict(size=15, color="black"),
-        hoverinfo="text",
-        marker=dict(
-            size=sizes,
-            line_width=2,
-            color=colors,
-        ),
-        name="Ants",
-    )
 
-    # Add node labels
-    node_text = [f"{k['id']}" for k in graph.vs]
-    node_trace.text = node_text
-
+    if community_trace:
+        data = [edge_trace] + community_trace
+    else:
+        data = [edge_trace, node_trace]
+        
     # Create the figure
     fig = go.Figure(
-        data=[edge_trace, node_trace],
+        data=data,
         layout=go.Layout(
             title=f"Network Graph of Ants colony {colony} on day {day}",
             titlefont_size=20,
@@ -226,20 +267,6 @@ def get_graph(colony, day, graph_type, edge_filter):
         ),
     )
 
-    unique_colors = set(colors)
-
-    for color in unique_colors:
-        fig.add_trace(
-            go.Scatter(
-                x=[None],
-                y=[None],
-                mode="markers",
-                marker=dict(size=10, color=color),
-                legendgroup=color,
-                showlegend=True,
-                name=colors_dict[color],
-            )
-        )
     return fig, ris
 
 
