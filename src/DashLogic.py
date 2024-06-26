@@ -223,7 +223,9 @@ def _get_eigenvector_centrality(graph, graph_df, period):
 
 def get_graph(colony, day, graph_type, edge_filter):
     graph, graph_df = read_graph(colony, day)
-    graph_comm, graph_df_comm = read_graph_our_community(colony, day)
+    if graph_type == "our_community":
+        graph_comm, graph_df_comm = read_graph_our_community(colony, day)
+
     ris = ""
     if graph_type == "community":
         colors = create_color_map_community(graph_df, "group_period1")
@@ -246,8 +248,9 @@ def get_graph(colony, day, graph_type, edge_filter):
         sizes = [25 for i in range(len(graph.vs))]
 
     graph = remove_edges(graph, edge_filter)
-    graph_comm = remove_edges(graph_comm, edge_filter)
-    
+    if graph_type == "our_community":
+        graph_comm = remove_edges(graph_comm, edge_filter)
+
     community_trace = []
 
     if graph_type == "community":
