@@ -129,7 +129,7 @@ app.layout = html.Div(
                                     options=[
                                         {"label": "Normal", "value": "normal"},
                                         {
-                                            "label": "Degree centrality",
+                                            "label": "Degree Centrality",
                                             "value": "degree",
                                         },
                                         {
@@ -140,9 +140,9 @@ app.layout = html.Div(
                                             "label": "Eigenvector Centrality",
                                             "value": "eigenvector",
                                         },
-                                        {"label": "Community", "value": "community"},
+                                        {"label": "True Community", "value": "community"},
                                         {
-                                            "label": "Our community",
+                                            "label": "Our Clustering",
                                             "value": "our_community",
                                         },
                                     ],
@@ -211,8 +211,11 @@ app.layout = html.Div(
     Output("day-slider", "value"),
     Output("day-slider", "step"),
     Input("colony-dropdown", "value"),
+    Input("graph-type", "value"),
 )
-def update_day_slider(colony):
+def update_day_slider(colony, graph_type):
+    if graph_type == "our_community":
+        return {i: days[i - 1] for i in range(1, 10, 2)}, 9, 1, 1
     if colony == "6":
         return {i: days[i - 1] for i in range(1, 40)}, 39, 1, 1
     return {i: days[i - 1] for i in range(1, 42)}, 41, 1, 1

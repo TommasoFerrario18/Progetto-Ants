@@ -9,24 +9,42 @@ from itertools import product
 colors_dict = {
     "lime": "Ants",
     "red": "Queen",
-    "cyan": "Nurses",
-    "yellow": "Cleaners",
-    "blue": "Foragers",
+    "#00d7ff": "Nurses",
+    "#b9f2f0": "True Nurses",
+    "#8de5a1": "True Foragers",
+    "#d0bbff": "True Cleaners",
+    "#8b2be2": "Cleaners",
+    "#1ac938": "Foragers",
     "orange": "Max Centrality",
     "grey": "Disappeared",
 }
 
 role_to_colors_dict = {
-    "N": "cyan",
-    "F": "blue",
-    "C": "yellow",
+    "N": "#00d7ff",
+    "NE": "#b9f2f0",
+    "F": "#1ac938",
+    "FE": "#8de5a1",
+    "C": "#8b2be2",
+    "CE": "#d0bbff",
     "Q": "red",
+    "QE": "red",
     "": "grey",
+    "E": "grey",
 }
 
 
 def read_graph(colony, day):
     path = f"./data/insecta-ant-colony{colony}/ant_mersch_col{colony}_day{day}.graphml"
+    graph = ig.Graph.Read_GraphML(path)
+    graph_df = pd.DataFrame.from_dict(
+        {v.index: v.attributes() for v in graph.vs}, orient="index"
+    )
+
+    return graph, graph_df
+
+
+def read_graph_our_community(colony, day):
+    path = f"./data/insecta-ant-colony{colony}/ant_mersch_col{colony}_day{day}_community.graphml"
     graph = ig.Graph.Read_GraphML(path)
     graph_df = pd.DataFrame.from_dict(
         {v.index: v.attributes() for v in graph.vs}, orient="index"
@@ -112,16 +130,39 @@ def _get_node_community_position(graph, layout="kamada_kawai", period="group_per
     df = pd.DataFrame(columns=["id", "x", "y", "role"])
 
     for i in range(len(graph.vs)):
+        if period == "community_label":
+            if graph.vs[i]["group_period1"] == "Q":
+                val_dict = {
+                    "id": graph.vs[i]["id"],
+                    "x": layout[i][0],
+                    "y": layout[i][1],
+                    "role": "Q",
+                }
+            else:
+                val_dict = {
+                    "id": graph.vs[i]["id"],
+                    "x": layout[i][0],
+                    "y": layout[i][1],
+                    "role": (
+                        graph.vs[i]["community_label"]
+                        if graph.vs[i]["community_label"]
+                        == graph.vs[i]["group_period1"]
+                        else graph.vs[i]["community_label"] + "E"
+                    ),
+                }
+        else:
+            val_dict = {
+                "id": graph.vs[i]["id"],
+                "x": layout[i][0],
+                "y": layout[i][1],
+                "role": graph.vs[i][period],
+            }
+
         df = pd.concat(
             [
                 df,
                 pd.DataFrame(
-                    {
-                        "id": graph.vs[i]["id"],
-                        "x": layout[i][0],
-                        "y": layout[i][1],
-                        "role": graph.vs[i][period],
-                    },
+                    val_dict,
                     index=[0],
                 ),
             ],
@@ -182,6 +223,7 @@ def _get_eigenvector_centrality(graph, graph_df, period):
 
 def get_graph(colony, day, graph_type, edge_filter):
     graph, graph_df = read_graph(colony, day)
+    graph_comm, graph_df_comm = read_graph_our_community(colony, day)
     ris = ""
     if graph_type == "community":
         colors = create_color_map_community(graph_df, "group_period1")
@@ -196,15 +238,36 @@ def get_graph(colony, day, graph_type, edge_filter):
         colors, sizes, ris = _get_eigenvector_centrality(
             graph, graph_df, "group_period1"
         )
+    elif graph_type == "our_community":
+        sizes = [25 for _ in range(len(graph.vs))]
+        colors = ["lime" for _ in range(len(graph.vs))]
     else:
-        sizes = [25 for i in range(len(graph.vs))]
         colors = ["lime" for i in range(len(graph.vs))]
+        sizes = [25 for i in range(len(graph.vs))]
 
     graph = remove_edges(graph, edge_filter)
+    graph_comm = remove_edges(graph_comm, edge_filter)
+    
     community_trace = []
 
     if graph_type == "community":
         df, Xe, Ye = _get_node_community_position(graph, period="group_period1")
+        for role in df["role"].unique():
+            if role == "":
+                continue
+            tmp = df[df["role"] == role]
+            community_trace.append(
+                go.Scatter(
+                    x=tmp["x"],
+                    y=tmp["y"],
+                    mode="markers+text",
+                    marker=dict(size=25, color=role_to_colors_dict[role]),
+                    name=colors_dict[role_to_colors_dict[role]],
+                    text=tmp["id"].values,
+                )
+            )
+    elif graph_type == "our_community":
+        df, Xe, Ye = _get_node_community_position(graph_comm, period="community_label")
         for role in df["role"].unique():
             if role == "":
                 continue
@@ -252,7 +315,7 @@ def get_graph(colony, day, graph_type, edge_filter):
         data = [edge_trace] + community_trace
     else:
         data = [edge_trace, node_trace]
-        
+
     # Create the figure
     fig = go.Figure(
         data=data,
