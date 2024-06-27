@@ -4,6 +4,7 @@ import pandas as pd
 import igraph as ig
 import numpy as np
 
+from scipy.stats import ranksums, ks_2samp
 from itertools import product
 
 colors_dict = {
@@ -471,5 +472,107 @@ def get_sankey(colony, day):
     fig.update_layout(
         title_text="Sankey Diagram con Etichette per Gruppi di Nodi",
         annotations=annotations,
+    )
+    return fig
+
+
+def _compute_test(dist_1, dist_2, alpha=0.05):
+    ks = ""
+    # Kolmogorov-Smirnov Test
+    _, ks_pvalue = ks_2samp(dist_1, dist_2)
+    if ks_pvalue < alpha:
+        ks = (1, round(ks_pvalue, 3))
+    else:
+        ks = (0, round(ks_pvalue, 3))
+
+    rs = ""
+    # Ranksums Test
+    _, rs_pvalue = ranksums(dist_1, dist_2)
+    if rs_pvalue < alpha:
+        rs = (1, round(rs_pvalue, 3))
+    else:
+        rs = (0, round(rs_pvalue, 3))
+    return ks, rs
+
+
+def plot_distribution(colony, day, attr, period):
+    graph, graph_df = read_graph(colony, day)
+
+    hist = px.histogram(
+        graph_df,
+        x=attr,
+        color=period,
+        color_discrete_map=role_to_colors_dict,
+        title=f"Distribution of {attr} in the colony {colony} on day {day}",
+        nbins=40,
+    )
+
+    roles = ["N", "F", "C"]
+    products = list(product(roles, repeat=2))
+    ks_1 = []
+    ks_0 = []
+    rs_1 = []
+    rs_0 = []
+    dist_diff = []
+    dist_not = []
+    for p in products:
+        if p[0] == p[1]:
+            continue
+        else:
+            dist_1 = graph_df[graph_df[period] == p[0]][attr]
+            dist_2 = graph_df[graph_df[period] == p[1]][attr]
+            ks_val, rs_val = _compute_test(dist_1, dist_2)
+            if ks_val[0] == 1 and rs_val[0] == 1:
+                ks_1.append(ks_val[1])
+                rs_1.append(rs_val[1])
+                dist_diff.append(f"{p[0]} - {p[1]}")
+            else:
+                ks_0.append(ks_val[1])
+                rs_0.append(rs_val[1])
+                dist_not.append(f"{p[0]} - {p[1]}")
+
+    tab_1 = _compute_table(dist_diff, ks_1, rs_1)
+    tab_0 = _compute_table(dist_not, ks_0, rs_0)
+
+    fig = go.Figure(hist)
+
+    fig.update_layout(
+        width=None, height=600, barmode="overlay", xaxis_title=attr, yaxis_title="Count"
+    )
+    fig.update_traces(opacity=0.5)
+    return fig, tab_1, tab_0
+
+
+def _compute_table(dist, ks, rs):
+    headerColor = "blue"
+    rowEvenColor = "lightblue"
+    rowOddColor = "white"
+    fig = go.Figure(
+        data=[
+            go.Table(
+                header=dict(
+                    values=[
+                        "<b></b>",
+                        "<b>Test Kolmogorov-Smirnov</b>",
+                        "<b>Ranksums Test</b>",
+                    ],
+                    line_color="darkslategray",
+                    fill_color=headerColor,
+                    align=["center"],
+                    font=dict(color="white", size=30),
+                ),
+                cells=dict(
+                    values=[
+                        dist,
+                        ks,
+                        rs,
+                    ],
+                    line_color="darkslategray",
+                    # 2-D list of colors for alternating rows
+                    align=["center"],
+                    font=dict(color="darkslategray", size=26),
+                ),
+            )
+        ]
     )
     return fig

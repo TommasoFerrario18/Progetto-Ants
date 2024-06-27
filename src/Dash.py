@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 import dash
 
-from DashLogic import edge_slider_update, get_graph, get_sankey
+from DashLogic import edge_slider_update, get_graph, get_sankey, plot_distribution
 
 
 # Variabili globali
@@ -63,6 +63,15 @@ days = [
     "40",
     "41",
 ]
+attributes = [
+    "visits_to_rubbishpile",
+    "visits_to_nest_entrance",
+    "visits_to_brood",
+    "nb_foraging_events",
+    "age(days)",
+    "body_size",
+]
+
 
 colony_idx = 0
 day_idx = 0
@@ -77,7 +86,7 @@ app = dash.Dash(
 # Layout
 app.layout = html.Div(
     [
-        html.H1("Ant Colony Graphs"),
+        html.H1("Ant Colony Graphs", style={"margin": "20px"}),
         dbc.Row(
             [
                 dbc.Col(
@@ -140,7 +149,10 @@ app.layout = html.Div(
                                             "label": "Eigenvector Centrality",
                                             "value": "eigenvector",
                                         },
-                                        {"label": "True Community", "value": "community"},
+                                        {
+                                            "label": "True Community",
+                                            "value": "community",
+                                        },
                                         {
                                             "label": "Our Clustering",
                                             "value": "our_community",
@@ -189,6 +201,78 @@ app.layout = html.Div(
                     ],
                     style={"margin": "15px"},
                 ),
+            ],
+        ),
+        html.Hr(),
+        html.Div(
+            id="plot-container",
+            style={"margin": "50px", "border": "1px solid", "border-radius": "10px"},
+            children=[
+                html.H2("Distribution Plot", style={"margin": "10px"}),
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            [
+                                html.Label(
+                                    "Attribute",
+                                    style={"font-weight": "bold", "margin": "10px"},
+                                ),
+                                dcc.Dropdown(
+                                    id="attribute-dropdown",
+                                    options=[
+                                        {"label": attr.replace("_", " "), "value": attr}
+                                        for attr in attributes
+                                    ],
+                                    value="visits_to_rubbishpile",
+                                ),
+                            ],
+                            width=5,
+                        ),
+                        dbc.Col(
+                            [
+                                html.Label(
+                                    "Period",
+                                    style={"font-weight": "bold", "margin": "10px"},
+                                ),
+                                dcc.Dropdown(
+                                    id="period-dropdown",
+                                    options=[
+                                        {"label": attr.replace("_", " "), "value": attr}
+                                        for attr in list_periods
+                                    ],
+                                    value="group_period1",
+                                ),
+                            ],
+                            width=5,
+                        ),
+                    ],
+                    style={"margin": "30px"},
+                ),
+                dcc.Graph(id="plot", style={"margin": "10px"}),
+                # dbc.Row(
+                #     [
+                #         dbc.Col(
+                #             [
+                #                 html.H2(
+                #                     "Not difference between colonies",
+                #                 ),
+                #                 dcc.Graph(
+                #                     id="not-diff-info-box", style={"margin": "10px"}
+                #                 ),
+                #             ],
+                #             width=6,
+                #         ),
+                #         dbc.Col(
+                #             [
+                #                 html.H2(
+                #                     "Difference between colonies",
+                #                 ),
+                #                 dcc.Graph(id="diff-info-box", style={"margin": "10px"}),
+                #             ],
+                #             width=6,
+                #         ),
+                #     ]
+                # ),
             ],
         ),
         html.Hr(),
@@ -253,6 +337,21 @@ def update_edge_slider(colony, day):
 )
 def update_sankey(colony):
     return get_sankey(colony, days[0])
+
+
+@app.callback(
+    Output("plot", "figure"),
+    # Output("diff-info-box", "figure"),
+    # Output("not-diff-info-box", "figure"),
+    Input("attribute-dropdown", "value"),
+    Input("colony-dropdown", "value"),
+    Input("day-slider", "value"),
+    Input("period-dropdown", "value"),
+)
+def update_plot(attribute, colony, day, period):
+    fig, tab_1, tab_0 = plot_distribution(colony, days[int(day) - 1], attribute, period)
+    # return fig, tab_1, tab_0
+    return fig
 
 
 if __name__ == "__main__":
