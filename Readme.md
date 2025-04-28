@@ -38,3 +38,9 @@ python Dash.py
 ### Data
 
 Ensure that the dataset is placed in the `data/` folder in the root of the project directory.
+
+### Contributors
+- [AnnaMarika01](https://github.com/AnnaMarika01)
+- [Emamasi-uni](https://github.com/Emamasi-uni)
+- [TommasoFerrario18](https://github.com/TommasoFerrario18)
+
